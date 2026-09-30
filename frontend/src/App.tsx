@@ -8,6 +8,7 @@ import {
   Check,
   CheckCircle2,
   FileCheck2,
+  FileText,
   LockKeyhole,
   LogOut,
   Menu,
@@ -18,7 +19,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { api, type EvidenceRecord, type IncomeCredential, type IncomeProfile, type ApiSource } from "./api";
+import { api, type EvidenceRecord, type IncomeCredential, type IncomeProfile, type ApiSource, type UploadedDocument } from "./api";
 import { confirmRegistration, currentUser, login, logout, register } from "./auth";
 import { awsConfig, isAwsAuthConfigured } from "./awsConfig";
 import "./App.css";
@@ -70,6 +71,7 @@ function App() {
   const [sources, setSources] = useState<IncomeSource[]>([]);
   const [profile, setProfile] = useState<IncomeProfile | null>(null);
   const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
+  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [credential, setCredential] = useState<IncomeCredential | null>(null);
   const [apiError, setApiError] = useState("");
   const [apiErrorAction, setApiErrorAction] = useState<"data" | "credential" | null>(null);
@@ -89,13 +91,15 @@ function App() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    void Promise.all([api.profile(), api.sources(), api.evidence()]).then(([nextProfile, sourceResponse, evidenceResponse]) => {
+    void Promise.all([api.profile(), api.sources(), api.evidence(), api.documents()]).then(([nextProfile, sourceResponse, evidenceResponse, documentResponse]) => {
       if (!active) return;
       const sourceRecords = Array.isArray(sourceResponse) ? sourceResponse : sourceResponse.sources ?? [];
       const evidenceRecords = Array.isArray(evidenceResponse) ? evidenceResponse : evidenceResponse.evidence ?? [];
+      const documentRecords = Array.isArray(documentResponse) ? documentResponse : documentResponse.documents ?? [];
       setProfile(nextProfile);
       setSources(sourceRecords.map(normalizeSource));
       setEvidence(evidenceRecords);
+      setDocuments(documentRecords);
       setApiError("");
       setApiErrorAction(null);
     }).catch((error: unknown) => {
@@ -128,6 +132,14 @@ function App() {
     showNotice(`${source.name} added to your income sources`);
   };
 
+  const uploadEvidence = async (file: File) => {
+    await api.uploadDocument(file);
+    setModal(null);
+    setLoadingData(true);
+    setReloadData((current) => current + 1);
+    showNotice(`${file.name} uploaded securely to S3`);
+  };
+
   const createCredential = async () => {
     setApiError("");
     setApiErrorAction(null);
@@ -148,6 +160,7 @@ function App() {
     setProfile(null);
     setSources([]);
     setEvidence([]);
+    setDocuments([]);
     setCredential(null);
   };
 
@@ -196,13 +209,13 @@ function App() {
         {!profile && !loadingData && <div className="trail-api-note"><b>Showing sample profile values</b>Live metrics will appear after the IncomeTrail API returns profile data.</div>}
         <div className="trail-content">
           {view === "profile" && <Profile profile={displayProfile} sources={sources} onAddEvidence={() => setModal("evidence")} />}
-          {view === "evidence" && <Evidence evidence={evidence} />}
+          {view === "evidence" && <Evidence evidence={evidence} documents={documents} />}
           {view === "credential" && <Credential credential={credential} profile={displayProfile} onGenerate={createCredential} />}
           {view === "business" && <Business sources={sources} />}
           {view === "sources" && <Sources sources={sources} onAdd={() => setModal("source")} />}
         </div>
       </main>
-      {modal && <Dialog type={modal} close={() => setModal(null)} onAddSource={addSource} />}
+      {modal && <Dialog type={modal} close={() => setModal(null)} onAddSource={addSource} onUploadFile={uploadEvidence} />}
       {notice && <div className="trail-toast" role="status"><CheckCircle2 size={17} />{notice}</div>}
     </div>
   );
@@ -315,10 +328,11 @@ function Intro({ eyebrow, title, text, children }: { eyebrow: string; title: str
   return <section className="trail-intro"><div><em>{eyebrow}</em><h2>{title}</h2><p>{text}</p></div>{children}</section>;
 }
 
-function Evidence({ evidence }: { evidence: EvidenceRecord[] }) {
+function Evidence({ evidence, documents }: { evidence: EvidenceRecord[]; documents: UploadedDocument[] }) {
   return <>
     <Intro eyebrow="RECONCILIATION ENGINE" title="Every important number can be traced back to evidence." text="Claims are compared with source documents and bank activity. Discrepancies are surfaced rather than hidden."><div className="trail-match-count"><b>{evidence.length}</b><span>evidence relationships matched</span></div></Intro>
     <Panel title="Income reconciliation" detail="Claim → source document → bank evidence">{evidence.length ? <div className="trail-reconciliation"><div className="trail-recon-header"><span>Source</span><span>Claimed</span><span>Documented</span><span>Bank-supported</span><span>Status</span></div>{evidence.map((record, index) => <div className="trail-recon-row" key={`${record.source ?? "evidence"}-${index}`}><b>{record.source || "Income source"}</b><span>${Number(record.claimedAmount ?? 0).toLocaleString()}</span><span>${Number(record.documentedAmount ?? 0).toLocaleString()}</span><span>${Number(record.bankSupportedAmount ?? 0).toLocaleString()}</span><label><Check size={13} /> {(record.status || "PENDING").replaceAll("_", " ").toLowerCase()}</label></div>)}</div> : <p className="trail-empty">No evidence records are available for this account.</p>}</Panel>
+    <Panel title="Uploaded evidence" detail="Private documents stored in your IncomeTrail account">{documents.length ? <div className="trail-document-list">{documents.map((document) => <div className="trail-document-row" key={document.documentId}><FileText size={17} /><div><b>{document.fileName}</b><span>{document.contentType} · {Math.max(1, Math.round(document.fileSize / 1024))} KB</span></div><label>{document.status}</label></div>)}</div> : <p className="trail-empty">No documents have been uploaded.</p>}</Panel>
     <div className="trail-callout trail-callout-wide"><ShieldCheck size={19} /><span><b>Evidence provenance is built in.</b> Every derived figure can be traced to supporting records.</span></div>
   </>;
 }
@@ -363,13 +377,25 @@ function Sources({ sources, onAdd }: { sources: IncomeSource[]; onAdd: () => voi
   </>;
 }
 
-function Dialog({ type, close, onAddSource }: { type: ModalType; close: () => void; onAddSource: (source: IncomeSource) => Promise<void> }) {
-  const [fileName, setFileName] = useState("");
+function Dialog({ type, close, onAddSource, onUploadFile }: { type: ModalType; close: () => void; onAddSource: (source: IncomeSource) => Promise<void>; onUploadFile: (file: File) => Promise<void> }) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [sourceType, setSourceType] = useState("Gig platform");
   const isSource = type === "source";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const submitUpload = async () => {
+    if (!selectedFile) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onUploadFile(selectedFile);
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Unable to upload this document.");
+    } finally {
+      setBusy(false);
+    }
+  };
   const submitSource = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
@@ -387,7 +413,7 @@ function Dialog({ type, close, onAddSource }: { type: ModalType; close: () => vo
   return <div className="trail-overlay" onMouseDown={(event) => event.target === event.currentTarget && close()}>
     <section className="trail-dialog" role="dialog" aria-modal="true" aria-labelledby="trail-dialog-title"><button className="trail-dialog-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>
       {isSource ? <form onSubmit={submitSource}><span className="trail-dialog-icon"><Plus size={19} /></span><h2 id="trail-dialog-title">Add an income source</h2><p>Keep each income stream connected to its own evidence trail.</p><label className="trail-form-label">Source name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Design clients" /></label><label className="trail-form-label">Source type<select value={sourceType} onChange={(event) => setSourceType(event.target.value)}><option>Gig platform</option><option>Casual employment</option><option>Client income</option><option>Other income</option></select></label>{error && <div className="trail-auth-error" role="alert">{error}</div>}<button className="trail-primary trail-full-button" type="submit" disabled={busy}>{busy ? "Adding…" : "Add source"} <ArrowRight size={16} /></button></form>
-        : <><span className="trail-dialog-icon"><Upload size={19} /></span><h2 id="trail-dialog-title">Add income evidence</h2><p>Upload a bank statement, payslip, invoice or platform statement.</p><label className="trail-drop-zone"><Upload size={21} /><b>{fileName || "Choose an evidence file"}</b><span>PDF, CSV or image</span><input type="file" accept=".pdf,.csv,image/*" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")} /></label><div className="trail-api-note"><b>Document upload is not connected yet</b>The configured AWS API has no S3 upload-intent route. No file will be uploaded.</div></>}
+        : <><span className="trail-dialog-icon"><Upload size={19} /></span><h2 id="trail-dialog-title">Add income evidence</h2><p>Upload a bank statement, payslip, invoice or platform statement.</p><label className="trail-drop-zone"><Upload size={21} /><b>{selectedFile?.name || "Choose an evidence file"}</b><span>PDF, CSV, JPG, PNG or WebP · Max 10 MB</span><input type="file" accept=".pdf,.csv,.jpg,.jpeg,.png,.webp" onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setError(""); }} /></label>{error && <div className="trail-auth-error" role="alert">{error}</div>}<button className="trail-primary trail-full-button" disabled={!selectedFile || busy} onClick={submitUpload}>{busy ? "Uploading…" : "Upload evidence"}<Upload size={16} /></button><div className="trail-upload-privacy"><LockKeyhole size={14} /> Uploaded to your private IncomeTrail S3 folder.</div></>}
     </section>
   </div>;
 }

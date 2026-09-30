@@ -42,6 +42,25 @@ export type IncomeCredential = {
   status?: string;
 };
 
+export type UploadedDocument = {
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  status: string;
+  createdAt: string;
+};
+
+type UploadIntent = {
+  documentId: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  key: string;
+  uploadUrl: string;
+  fields: Record<string, string>;
+};
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!awsConfig.apiUrl) {
     throw new Error("API Gateway is not configured. Set VITE_API_URL in .env.local.");
@@ -78,6 +97,7 @@ export const api = {
   profile: () => request<IncomeProfile>("/income-profile"),
   sources: () => request<{ sources?: ApiSource[] } | ApiSource[]>("/income-sources"),
   evidence: () => request<{ evidence?: EvidenceRecord[] } | EvidenceRecord[]>("/evidence"),
+  documents: () => request<{ documents?: UploadedDocument[] } | UploadedDocument[]>("/documents"),
   createCredential: () => request<IncomeCredential>("/credentials", { method: "POST", body: "{}" }),
   verifyCredential: (credentialId: string) =>
     request<IncomeCredential>(`/verify/${encodeURIComponent(credentialId)}`),
@@ -86,4 +106,33 @@ export const api = {
       method: "POST",
       body: JSON.stringify(source),
     }),
+  uploadDocument: async (file: File): Promise<UploadedDocument> => {
+    const intent = await request<UploadIntent>("/documents/upload-intent", {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type,
+        fileSize: file.size,
+      }),
+    });
+
+    const form = new FormData();
+    Object.entries(intent.fields).forEach(([key, value]) => form.append(key, value));
+    form.append("file", file);
+    const uploadResponse = await fetch(intent.uploadUrl, { method: "POST", body: form });
+    if (!uploadResponse.ok) {
+      throw new Error(`S3 upload failed (${uploadResponse.status}). Please try again.`);
+    }
+
+    return request<UploadedDocument>("/documents", {
+      method: "POST",
+      body: JSON.stringify({
+        documentId: intent.documentId,
+        fileName: file.name,
+        contentType: file.type,
+        fileSize: file.size,
+        key: intent.key,
+      }),
+    });
+  },
 };

@@ -23,4 +23,10 @@
 .trail-verify-form{display:flex;align-items:end;gap:10px;margin-bottom:14px}
 .trail-verify-form .trail-form-label{flex:1;margin:0}
 .trail-verify-form .trail-primary{flex:none}
+.trail-document-list{display:grid}
+.trail-document-row{min-height:55px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #edf1ed;color:#17644a}
+.trail-document-row>div{min-width:0;display:grid;gap:4px;flex:1}
+.trail-document-row b{overflow:hidden;color:#33483b;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.trail-document-row span{color:#87938a;font-size:9px}
+.trail-document-row label{padding:4px 6px;border-radius:4px;background:#edf5ee;color:#17644a;font-size:8px;font-weight:700}
 @media(max-width:480px){.trail-verify-form{align-items:stretch;flex-direction:column}.trail-verify-form .trail-primary{width:100%}.trail-error-banner{align-items:flex-start}}

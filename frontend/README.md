@@ -34,6 +34,9 @@ npm run lint
 - `GET /income-sources`
 - `POST /income-sources`
 - `GET /evidence`
+- `POST /documents/upload-intent`
+- `POST /documents`
+- `GET /documents`
 - `POST /credentials`
 - `GET /verify/{credentialId}`
 
@@ -41,4 +44,6 @@ Protected requests include the Cognito access token as `Authorization: Bearer <t
 
 ## Evidence Upload
 
-Evidence file selection is not connected to AWS yet. The API contract supplied for this frontend does not include an upload-intent endpoint or S3 upload flow, so selected files are not uploaded. Implement the authenticated signed-upload route before enabling document submission.
+The frontend requests a short-lived upload policy, posts the file directly to S3, then registers and reloads its metadata. The Python/boto3 handler and deployment requirements are in `../backend/`.
+
+Before using uploads in AWS, connect all three document routes to the existing HTTP API with the Cognito JWT authorizer, configure the Lambda role and environment variables, and set bucket CORS for the frontend origin. See `../backend/README.md`. No AWS resources were changed by this code update.
