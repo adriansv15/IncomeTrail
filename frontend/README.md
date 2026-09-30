@@ -1,75 +1,44 @@
-# React + TypeScript + Vite
+# IncomeTrail Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React, TypeScript, and Vite frontend with Amazon Cognito authentication and API Gateway integration.
 
-Currently, two official plugins are available:
+## Configure AWS
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Copy the example environment file:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```powershell
+Copy-Item .env.example .env.local
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Edit `.env.local` with the API URL, Cognito User Pool ID, app client ID, and AWS region for your environment. These `VITE_*` values are included in the browser build, so never put AWS secret keys or other private credentials in them. Restart Vite after changing the file.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The local environment file is ignored by Git.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Run
 
+```powershell
+npm install
+npm run dev
 ```
+
+Production checks:
+
+```powershell
+npm run build
+npm run lint
+```
+
+## Integrated Routes
+
+- `GET /income-profile`
+- `GET /income-sources`
+- `POST /income-sources`
+- `GET /evidence`
+- `POST /credentials`
+- `GET /verify/{credentialId}`
+
+Protected requests include the Cognito access token as `Authorization: Bearer <token>`.
+
+## Evidence Upload
+
+Evidence file selection is not connected to AWS yet. The API contract supplied for this frontend does not include an upload-intent endpoint or S3 upload flow, so selected files are not uploaded. Implement the authenticated signed-upload route before enabling document submission.
