@@ -1,437 +1,195 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   Activity,
-  ArrowUpRight,
+  ArrowRight,
+  Banknote,
+  BarChart3,
   BriefcaseBusiness,
-  ChevronDown,
-  CircleHelp,
+  Check,
+  CheckCircle2,
   FileCheck2,
-  LayoutDashboard,
-  MoreHorizontal,
+  Link2,
+  LockKeyhole,
+  Menu,
   Plus,
-  Search,
-  Settings,
+  ScanSearch,
   ShieldCheck,
-  WalletCards,
-  Zap,
+  Upload,
+  Users,
+  X,
 } from "lucide-react";
-import {
-  CoverageRow,
-  LatestRecords,
-  Metric,
-  PanelHeader,
-  SourceCard,
-  TrackerStep,
-  VerificationHeading,
-} from "./components/DashboardComponents";
-import { AddSourceModal, VerificationModal } from "./components/Modals";
-import { initialSources, periods } from "./data/mockData";
-import type { Source } from "./types";
 import "./App.css";
 
-function App() {
-  const [sources, setSources] = useState(initialSources);
-  const [period, setPeriod] = useState("Last 6 months");
-  const [showAdd, setShowAdd] = useState(false);
-  const [showVerification, setShowVerification] = useState(false);
-  const [activeView, setActiveView] = useState("Dashboard");
+type View = "profile" | "evidence" | "credential" | "business" | "sources";
+type ModalType = "share" | "evidence" | "source";
+type IncomeSource = { name: string; type: string; monthly: number; initial: string };
 
-  const activeSources = sources.filter((source) => !source.archived);
-  const total = activeSources.reduce((sum, source) => sum + source.income, 0);
-  const addSource = (source: Source) => {
-    setSources((current) => [...current, source]);
-    setShowAdd(false);
+const navigation: { id: View; label: string; icon: typeof Activity }[] = [
+  { id: "profile", label: "Income profile", icon: BarChart3 },
+  { id: "evidence", label: "Evidence & matching", icon: ScanSearch },
+  { id: "credential", label: "Income Evidence Credential", icon: FileCheck2 },
+  { id: "business", label: "Business verification", icon: Users },
+  { id: "sources", label: "Income sources", icon: BriefcaseBusiness },
+];
+
+const months = [["Jun", 2140], ["Jul", 2320], ["Aug", 2050], ["Sep", 2480]] as const;
+
+function App() {
+  const [view, setView] = useState<View>("profile");
+  const [modal, setModal] = useState<ModalType | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [sources, setSources] = useState<IncomeSource[]>([
+    { name: "Uber", type: "Gig platform", monthly: 1310, initial: "U" },
+    { name: "Retail employer", type: "Casual employment", monthly: 760, initial: "R" },
+    { name: "Freelance design", type: "Client income", monthly: 410, initial: "F" },
+  ]);
+
+  const completeAction = (message: string) => {
+    setModal(null);
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 3600);
   };
-  const archiveSource = (id: number) => {
-    setSources((current) =>
-      current.map((source) =>
-        source.id === id ? { ...source, archived: true } : source,
-      ),
-    );
+  const addSource = (source: IncomeSource) => {
+    setSources((current) => [...current, source]);
+    completeAction(`${source.name} added to your income sources`);
   };
 
   return (
-    <div className="app-shell">
-      <Sidebar activeView={activeView} onNavigate={setActiveView} />
-      <main className="main-content">
-        <Topbar activeView={activeView} />
-        <div className="page-content">
-          <Welcome onAddSource={() => setShowAdd(true)} />
-          <SummaryMetrics
-            total={total}
-            activeSourceCount={activeSources.length}
-          />
-          <DashboardPanels
-            period={period}
-            onPeriodChange={setPeriod}
-            onReviewEvidence={() => setShowVerification(true)}
-          />
-          <IncomeSources
-            sources={activeSources}
-            onAddSource={() => setShowAdd(true)}
-            onArchive={archiveSource}
-          />
-          <BottomPanels onVerify={() => setShowVerification(true)} />
+    <div className="trail-app">
+      {mobileNavOpen && <button className="trail-scrim" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
+      <aside className={`trail-sidebar ${mobileNavOpen ? "is-open" : ""}`}>
+        <button className="trail-brand" onClick={() => setView("profile")}>
+          <span className="trail-brand-mark"><Activity size={19} /></span><span>IncomeTrail</span>
+        </button>
+        <small className="trail-side-label">WORKSPACE</small>
+        <nav className="trail-nav" aria-label="Main navigation">
+          {navigation.map(({ id, label, icon: Icon }) => (
+            <button key={id} className={`trail-nav-item ${view === id ? "active" : ""}`} onClick={() => { setView(id); setMobileNavOpen(false); }}>
+              <Icon size={17} /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="trail-sidebar-bottom">
+          <div className="trail-privacy"><LockKeyhole size={16} /><div><b>User-controlled sharing</b><span>Share only what is needed.</span></div></div>
+          <div className="trail-user"><b className="trail-avatar">AD</b><div><strong>Arnav</strong><span>Personal workspace</span></div></div>
+        </div>
+      </aside>
+
+      <main className="trail-main">
+        <header className="trail-header">
+          <button className="trail-icon-button trail-mobile-menu" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Menu size={20} /></button>
+          <div className="trail-heading"><em>INCOME INFRASTRUCTURE</em><h1>{navigation.find((item) => item.id === view)?.label}</h1></div>
+          <button className="trail-primary" onClick={() => setModal("share")}><Link2 size={16} /> Share credential</button>
+        </header>
+        <div className="trail-content">
+          {view === "profile" && <Profile sources={sources} onAddEvidence={() => setModal("evidence")} />}
+          {view === "evidence" && <Evidence />}
+          {view === "credential" && <Credential onShare={() => setModal("share")} />}
+          {view === "business" && <Business sources={sources} onReview={() => setView("evidence")} />}
+          {view === "sources" && <Sources sources={sources} onAdd={() => setModal("source")} />}
         </div>
       </main>
-      {showAdd && (
-        <AddSourceModal close={() => setShowAdd(false)} save={addSource} />
-      )}
-      {showVerification && (
-        <VerificationModal close={() => setShowVerification(false)} />
-      )}
+      {modal && <Dialog type={modal} close={() => setModal(null)} onComplete={completeAction} onAddSource={addSource} />}
+      {notice && <div className="trail-toast" role="status"><CheckCircle2 size={17} />{notice}</div>}
     </div>
   );
 }
 
-type SidebarProps = {
-  activeView: string;
-  onNavigate: (view: string) => void;
-};
-
-function Sidebar({ activeView, onNavigate }: SidebarProps) {
-  const navigation = [
-    [LayoutDashboard, "Dashboard"],
-    [WalletCards, "Income"],
-    [ShieldCheck, "Verification"],
-    [Activity, "History"],
-  ] as const;
-
-  return (
-    <aside className="sidebar">
-      <div className="brand">
-        <span className="brand-mark">
-          <Zap size={16} fill="currentColor" />
-        </span>
-        <span>
-          <strong>
-            Hustle<span>Ledger</span>
-          </strong>
-          <small>Income, made legible.</small>
-        </span>
-      </div>
-      <p className="eyebrow side-label">Workspace</p>
-      <nav className="nav-list" aria-label="Main navigation">
-        {navigation.map(([Icon, label]) => (
-          <button
-            key={label}
-            className={`nav-item ${activeView === label ? "active" : ""}`}
-            onClick={() => onNavigate(label)}
-          >
-            <Icon size={17} />
-            {label}
-          </button>
-        ))}
-      </nav>
-      <div className="sidebar-spacer" />
-      <div className="privacy-note">
-        <ShieldCheck size={17} />
-        <div>
-          <b>Your data, your control</b>
-          <small>Evidence is shared only when you choose to verify.</small>
-        </div>
-      </div>
-      <button className="nav-item">
-        <Settings size={17} /> Settings
-      </button>
-      <div className="profile">
-        <span className="avatar">AD</span>
-        <div>
-          <b>Arnav Deshmukh</b>
-          <small>Student account</small>
-        </div>
-        <MoreHorizontal size={17} />
-      </div>
-    </aside>
-  );
+function Metric({ icon: Icon, label, value, detail }: { icon: typeof Activity; label: string; value: string; detail: string }) {
+  return <article className="trail-metric"><span className="trail-metric-icon"><Icon size={17} /></span><span className="trail-metric-label">{label}</span><b>{value}</b><small>{detail}</small></article>;
 }
 
-function Topbar({ activeView }: { activeView: string }) {
-  return (
-    <header className="topbar">
-      <span className="breadcrumb">
-        Workspace <b>/</b> {activeView}
-      </span>
-      <div className="top-actions">
-        <label className="search-box">
-          <Search size={15} />
-          <input aria-label="Search income" placeholder="Search income..." />
-        </label>
-        <button className="icon-button" aria-label="Help">
-          <CircleHelp size={18} />
-        </button>
-        <span className="avatar">AD</span>
-      </div>
-    </header>
-  );
+function Panel({ title, detail, children }: { title: string; detail: string; children: React.ReactNode }) {
+  return <section className="trail-panel"><div className="trail-panel-heading"><div><h2>{title}</h2><p>{detail}</p></div></div>{children}</section>;
 }
 
-function Welcome({ onAddSource }: { onAddSource: () => void }) {
-  return (
-    <section className="welcome">
-      <div>
-        <p className="eyebrow">✦ Income command centre</p>
-        <h1>Good afternoon, Arnav.</h1>
-        <p className="lede">
-          See every income stream in one place, and make your earnings easier to
-          understand.
-        </p>
-      </div>
-      <button className="primary-button" onClick={onAddSource}>
-        <Plus size={17} /> Add income source
-      </button>
+function DataRow({ label, value }: { label: string; value: string }) {
+  return <div className="trail-data-row"><span>{label}</span><b>{value}</b></div>;
+}
+
+function SourceRow({ source }: { source: IncomeSource }) {
+  return <div className="trail-source-row"><span className="trail-source-initial">{source.initial}</span><div className="trail-source-name"><b>{source.name}</b><span>{source.type}</span></div><strong>${source.monthly.toLocaleString()}</strong><span className="trail-supported"><Check size={13} /> Supported</span></div>;
+}
+
+function Profile({ sources, onAddEvidence }: { sources: IncomeSource[]; onAddEvidence: () => void }) {
+  return <>
+    <section className="trail-hero">
+      <div className="trail-hero-copy"><em>EVIDENCE-BACKED INCOME</em><h2>Make your income legible, even when it doesn&apos;t come from one employer.</h2><p>IncomeTrail combines fragmented earnings, reconciles them against independent evidence, and creates a portable financial record businesses can verify.</p><button className="trail-primary" onClick={onAddEvidence}><Upload size={16} /> Add income evidence</button></div>
+      <div className="trail-credential-peek"><span><ShieldCheck size={16} /> INCOME EVIDENCE CREDENTIAL</span><b>$2,180 <small>supported / month</small></b><p>June — September 2026 · 3 sources</p><label><CheckCircle2 size={15} /> Evidence-backed</label></div>
     </section>
-  );
-}
-
-function SummaryMetrics({
-  total,
-  activeSourceCount,
-}: {
-  total: number;
-  activeSourceCount: number;
-}) {
-  return (
-    <section className="metrics" aria-label="Income summary">
-      <Metric
-        icon={WalletCards}
-        label="Current income"
-        value={`$${total.toLocaleString()}`}
-        note="September 2026"
-        accent="violet"
-      />
-      <Metric
-        icon={Activity}
-        label="Income reliability"
-        value="82"
-        note="/ 100 · Stable pattern"
-        accent="green"
-        help="Describes the stability of your income pattern. It does not determine creditworthiness."
-      />
-      <Metric
-        icon={FileCheck2}
-        label="Evidence coverage"
-        value="93%"
-        note="of claimed income supported"
-        accent="blue"
-      />
-      <Metric
-        icon={BriefcaseBusiness}
-        label="Active sources"
-        value={activeSourceCount.toString()}
-        note="income streams"
-        accent="amber"
-      />
+    <section className="trail-metrics" aria-label="Income summary">
+      <Metric icon={Banknote} label="Median monthly income" value="$2,230" detail="4-month period" />
+      <Metric icon={FileCheck2} label="Evidence coverage" value="94%" detail="$8,510 supported" />
+      <Metric icon={Activity} label="Income continuity" value="4 / 4" detail="Observed months" />
+      <Metric icon={BarChart3} label="Income volatility" value="18%" detail="Month-to-month" />
     </section>
-  );
-}
-
-type DashboardPanelsProps = {
-  period: string;
-  onPeriodChange: (period: string) => void;
-  onReviewEvidence: () => void;
-};
-
-function DashboardPanels({
-  period,
-  onPeriodChange,
-  onReviewEvidence,
-}: DashboardPanelsProps) {
-  return (
-    <div className="dashboard-grid">
-      <section className="panel history-panel">
-        <PanelHeader
-          title="Income history"
-          detail="A clear view of your earned income over time"
-        >
-          <div className="period-select">
-            <select
-              value={period}
-              onChange={(event) => onPeriodChange(event.target.value)}
-              aria-label="Select income history period"
-            >
-              {periods.map((item) => (
-                <option key={item}>{item}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} />
-          </div>
-        </PanelHeader>
-        <div className="chart-meta">
-          <div>
-            <strong>$2,840</strong>
-            <span>
-              September 2026 <i>+12.4%</i>
-            </span>
-          </div>
-          <span className="chart-legend">
-            <i /> Total income
-          </span>
-        </div>
-        <IncomeChart />
-      </section>
-      <section className="panel coverage-panel">
-        <PanelHeader
-          title="Evidence coverage"
-          detail="How much of your income is supported"
-        />
-        <div className="coverage-ring">
-          <div>
-            <strong>
-              93<span>%</span>
-            </strong>
-            <small>supported</small>
-          </div>
-        </div>
-        <div className="coverage-rows">
-          <CoverageRow
-            label="Transaction-supported"
-            value="$2,500"
-            width="83%"
-            color="violet"
-          />
-          <CoverageRow
-            label="Document-supported"
-            value="$300"
-            width="10%"
-            color="blue"
-          />
-          <CoverageRow
-            label="Self-reported"
-            value="$200"
-            width="7%"
-            color="muted"
-          />
-        </div>
-        <button className="text-button" onClick={onReviewEvidence}>
-          Review evidence <ArrowUpRight size={15} />
-        </button>
-      </section>
+    <div className="trail-grid">
+      <Panel title="Income history" detail="Observed income by month"><div className="trail-chart">{months.map(([month, amount]) => <div className="trail-chart-column" key={month}><div className="trail-chart-bar" style={{ height: `${amount / 30}px` }}><small>${(amount / 1000).toFixed(1)}k</small></div><span>{month}</span></div>)}</div></Panel>
+      <Panel title="Income stability profile" detail="Transparent metrics, no opaque score"><DataRow label="Income trend" value="Stable" /><DataRow label="Largest source" value="53%" /><DataRow label="Income sources" value={String(sources.length)} /><DataRow label="Evidence-backed months" value="4 / 4" /><div className="trail-callout"><ShieldCheck size={18} /><span><b>No credit score.</b> IncomeTrail provides evidence; the receiving business applies its own policy.</span></div></Panel>
     </div>
-  );
-}
-
-function IncomeChart() {
-  return (
-    <div className="chart">
-      <div className="grid-lines">
-        <span>$3k</span>
-        <span>$2k</span>
-        <span>$1k</span>
-        <span>$0</span>
-      </div>
-      <svg
-        viewBox="0 0 680 230"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="Income trend rising to 2840 dollars"
-      >
-        <defs>
-          <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#9b7cff" stopOpacity=".34" />
-            <stop offset="1" stopColor="#9b7cff" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M45 174 C105 160 110 105 165 125 S245 165 285 105 S370 130 405 90 S475 114 520 58 S590 74 645 30 L645 210 L45 210 Z"
-          fill="url(#area)"
-        />
-        <path
-          d="M45 174 C105 160 110 105 165 125 S245 165 285 105 S370 130 405 90 S475 114 520 58 S590 74 645 30"
-          fill="none"
-          stroke="#a58aff"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-        <circle
-          cx="645"
-          cy="30"
-          r="5"
-          fill="#0e1017"
-          stroke="#b49cff"
-          strokeWidth="3"
-        />
-      </svg>
-      <div className="chart-labels">
-        <span>Apr 26</span>
-        <span>May 26</span>
-        <span>Jun 26</span>
-        <span>Jul 26</span>
-        <span>Aug 26</span>
-        <span>Sep 26</span>
-      </div>
+    <div className="trail-grid trail-lower-grid">
+      <Panel title="Income sources" detail="September">{sources.map((source) => <SourceRow source={source} key={source.name} />)}</Panel>
+      <Panel title="Cash-flow context" detail="Historical, not a recommendation"><DataRow label="Median income" value="$2,230" /><DataRow label="Recurring expenses" value="− $1,520" /><div className="trail-surplus"><span>Observed surplus</span><b>$710</b></div><small className="trail-footnote">IncomeTrail does not decide affordability.</small></Panel>
     </div>
-  );
+  </>;
 }
 
-function IncomeSources({
-  sources,
-  onAddSource,
-  onArchive,
-}: {
-  sources: Source[];
-  onAddSource: () => void;
-  onArchive: (id: number) => void;
-}) {
-  return (
-    <section className="sources-section">
-      <PanelHeader
-        title="Active income sources"
-        detail={`${sources.length} income streams contributing to your record`}
-      >
-        <button className="secondary-button" onClick={onAddSource}>
-          <Plus size={15} /> Add source
-        </button>
-      </PanelHeader>
-      <div className="source-grid">
-        {sources.map((source) => (
-          <SourceCard
-            key={source.id}
-            source={source}
-            onArchive={() => onArchive(source.id)}
-          />
-        ))}
-        <button className="empty-source" onClick={onAddSource}>
-          <span>
-            <Plus size={18} />
-          </span>
-          <b>Add another income source</b>
-          <small>Keep your income record complete</small>
-        </button>
-      </div>
-    </section>
-  );
+function Intro({ eyebrow, title, text, children }: { eyebrow: string; title: string; text: string; children?: React.ReactNode }) {
+  return <section className="trail-intro"><div><em>{eyebrow}</em><h2>{title}</h2><p>{text}</p></div>{children}</section>;
 }
 
-function BottomPanels({ onVerify }: { onVerify: () => void }) {
-  return (
-    <section className="bottom-grid">
-      <section className="panel verification-card">
-        <VerificationHeading />
-        <p className="card-copy">
-          Build a portable record by matching your claimed income with
-          supporting evidence.
-        </p>
-        <div className="tracker">
-          <TrackerStep label="Draft" done />
-          <TrackerStep label="Documents received" />
-          <TrackerStep label="Under review" />
-          <TrackerStep label="Approved" />
-        </div>
-        <button className="primary-button" onClick={onVerify}>
-          Continue verification <ArrowUpRight size={15} />
-        </button>
-      </section>
-      <section className="panel records-card">
-        <PanelHeader title="Latest records" detail="Recent income activity">
-          <button className="icon-button" aria-label="View all records">
-            <ArrowUpRight size={16} />
-          </button>
-        </PanelHeader>
-        <LatestRecords />
-      </section>
+function Evidence() {
+  const records = [["Uber", "$1,420", "$1,390", "$1,386"], ["Retail", "$760", "$760", "$760"], ["Freelance", "$410", "$410", "$410"]];
+  return <>
+    <Intro eyebrow="RECONCILIATION ENGINE" title="Every important number can be traced back to evidence." text="Claims are compared with source documents and bank activity. Discrepancies are surfaced rather than hidden."><div className="trail-match-count"><b>12</b><span>evidence relationships matched</span></div></Intro>
+    <Panel title="September reconciliation" detail="Claim → source document → bank evidence"><div className="trail-reconciliation"><div className="trail-recon-header"><span>Source</span><span>Claimed</span><span>Documented</span><span>Bank-supported</span><span>Status</span></div>{records.map(([name, claimed, documented, bank]) => <div className="trail-recon-row" key={name}><b>{name}</b><span>{claimed}</span><span>{documented}</span><span>{bank}</span><label><Check size={13} /> Reconciled</label></div>)}</div></Panel>
+    <div className="trail-callout trail-callout-wide"><ShieldCheck size={19} /><span><b>Evidence provenance is built in.</b> Every derived figure can be traced to supporting records.</span></div>
+  </>;
+}
+
+function Credential({ onShare }: { onShare: () => void }) {
+  return <section className="trail-credential-page">
+    <div className="trail-credential-copy"><em>SHAREABLE FINANCIAL CREDENTIAL</em><h2>Income Evidence Credential</h2><p>A standardized representation of income that businesses can independently verify without requiring the worker to have a traditional employer.</p><button className="trail-primary" onClick={onShare}><Link2 size={16} /> Generate secure share</button><div className="trail-trust-list"><span><CheckCircle2 /> Evidence-backed</span><span><CheckCircle2 /> Traceable to source records</span><span><CheckCircle2 /> User-controlled</span></div></div>
+    <article className="trail-credential-card"><div className="trail-card-brand"><b>INCOMETRAIL</b><ShieldCheck size={20} /></div><h3>Income Evidence Credential</h3><strong>ARNAV DESHMUKH</strong><small>IT-82A7F4 · June — September 2026</small><div className="trail-card-metrics"><span>Median monthly income<b>$2,230</b></span><span>Supported income<b>$2,180</b></span><span>Evidence coverage<b>94%</b></span><span>Continuity<b>4 / 4 months</b></span><span>Volatility<b>18%</b></span><span>Sources<b>3</b></span></div><ul><li>Bank evidence</li><li>Gig platform statement</li><li>Employer payslip</li><li>Client invoice</li></ul><footer>Issued by IncomeTrail · Evidence-backed <b>▦</b></footer></article>
+  </section>;
+}
+
+function Business({ sources, onReview }: { sources: IncomeSource[]; onReview: () => void }) {
+  return <>
+    <section className="trail-hero trail-business-hero"><div className="trail-hero-copy"><em>BUSINESS VERIFICATION</em><h2>Verify income without rebuilding the worker&apos;s financial story.</h2><p>A business receives a standardized credential and can inspect evidence when permission is granted.</p></div><div className="trail-credential-peek"><span><ShieldCheck size={16} /> CREDENTIAL VERIFIED</span><b className="trail-id">IT-82A7F4</b><p>Authentic · Evidence-backed · Current</p></div></section>
+    <div className="trail-grid"><Panel title="Applicant income" detail="Credential summary"><div className="trail-business-income">$2,230 <small>median monthly income</small></div><DataRow label="Supported income" value="$2,180" /><DataRow label="Evidence coverage" value="94%" /><DataRow label="Continuity" value="4 / 4 months" /><DataRow label="Volatility" value="18%" /><button className="trail-primary trail-full-button" onClick={onReview}><FileCheck2 size={16} /> View supporting evidence</button></Panel><Panel title="Income composition" detail="September">{sources.map((source) => <SourceRow source={source} key={source.name} />)}</Panel></div>
+    <div className="trail-callout trail-callout-wide"><LockKeyhole size={18} /><span><b>IncomeTrail does not make the business decision.</b> The credential provides standardized evidence; the receiving business applies its own rules.</span></div>
+  </>;
+}
+
+function Sources({ sources, onAdd }: { sources: IncomeSource[]; onAdd: () => void }) {
+  return <>
+    <Intro eyebrow="MULTI-SOURCE INCOME" title="One financial record across many ways of earning." text="Connect or upload bank records, payslips, gig statements and invoices while preserving their original provenance."><button className="trail-primary" onClick={onAdd}><Plus size={16} /> Add source</button></Intro>
+    <div className="trail-source-grid">{sources.map((source, index) => <article className="trail-source-card" key={source.name}><span className={`trail-source-initial source-tone-${index % 3}`}>{source.initial}</span><h3>{source.name}</h3><span>{source.type}</span><b>${source.monthly.toLocaleString()}<small> / mo</small></b><label><CheckCircle2 size={15} /> {index === 0 ? "Bank + platform statement" : "Supporting evidence matched"}</label></article>)}<button className="trail-add-source" onClick={onAdd}><Plus size={19} /><b>Add another source</b></button></div>
+  </>;
+}
+
+function Dialog({ type, close, onComplete, onAddSource }: { type: ModalType; close: () => void; onComplete: (message: string) => void; onAddSource: (source: IncomeSource) => void }) {
+  const [fileName, setFileName] = useState("");
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [sourceType, setSourceType] = useState("Gig platform");
+  const isShare = type === "share";
+  const isSource = type === "source";
+  const submitSource = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    onAddSource({ name: trimmedName, type: sourceType, monthly: Number(amount), initial: trimmedName.charAt(0).toUpperCase() });
+  };
+
+  return <div className="trail-overlay" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+    <section className="trail-dialog" role="dialog" aria-modal="true" aria-labelledby="trail-dialog-title"><button className="trail-dialog-close" onClick={close} aria-label="Close dialog"><X size={18} /></button>
+      {isShare ? <><span className="trail-dialog-icon"><Link2 size={19} /></span><h2 id="trail-dialog-title">Create secure credential share</h2><p>Select what a business can access. Raw documents are not automatically exposed.</p><div className="trail-share-options">{["Income history", "Supported income", "Evidence coverage", "Income source breakdown", "Raw bank transactions"].map((item, index) => <label key={item}><input type="checkbox" defaultChecked={index < 4} />{item}</label>)}</div><button className="trail-primary trail-full-button" onClick={() => onComplete("Secure credential share created")}>Generate secure share <ArrowRight size={16} /></button></>
+        : isSource ? <form onSubmit={submitSource}><span className="trail-dialog-icon"><Plus size={19} /></span><h2 id="trail-dialog-title">Add an income source</h2><p>Keep each income stream connected to its own evidence trail.</p><label className="trail-form-label">Source name<input required value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Design clients" /></label><label className="trail-form-label">Source type<select value={sourceType} onChange={(event) => setSourceType(event.target.value)}><option>Gig platform</option><option>Casual employment</option><option>Client income</option><option>Other income</option></select></label><label className="trail-form-label">Monthly income<input required min="0" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="e.g. 850" /></label><button className="trail-primary trail-full-button" type="submit">Add source <ArrowRight size={16} /></button></form>
+        : <><span className="trail-dialog-icon"><Upload size={19} /></span><h2 id="trail-dialog-title">Add income evidence</h2><p>Upload a bank statement, payslip, invoice or platform statement.</p><label className="trail-drop-zone"><Upload size={21} /><b>{fileName || "Choose an evidence file"}</b><span>PDF, CSV or image · Demo upload</span><input type="file" accept=".pdf,.csv,image/*" onChange={(event) => setFileName(event.target.files?.[0]?.name ?? "")} /></label><button className="trail-primary trail-full-button" disabled={!fileName} onClick={() => onComplete(`${fileName} added for review`)}>Process evidence</button></>}
     </section>
-  );
+  </div>;
 }
 
 export default App;
